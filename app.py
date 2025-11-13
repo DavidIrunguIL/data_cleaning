@@ -1,5 +1,15 @@
 import pandas as pd
 import streamlit as st
+from google.cloud import bigquery
+import pandas as pd
+
+# Load credentials
+from google.oauth2 import service_account
+
+credentials = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"]
+)
+client = bigquery.Client(credentials=credentials, project=credentials.project_id)
 # import plotly.express as px
 # from data.get_data import get_data
 # from modules.login import login
@@ -25,8 +35,8 @@ col_logo, col_title = st.columns([1,4])
 # Define your pages. Use the path to your page files.
 pages = [
     st.Page("pages/vehciles_details.py", title="vehciles_details", icon="📋"),
-    st.Page("pages/specifications.py", title="specifications", icon="📌"),
-    st.Page("pages/ownership_and_others.py", title="ownership_and_others", icon="🙋‍♂️"),
+    st.Page("pages/policy.py", title="existing policy details", icon="📌"),
+    # st.Page("pages/ownership_and_others.py", title="ownership_and_others", icon="🙋‍♂️"),
     
    
     # st.Page("pages/treasury.py", title="Treasury", icon="💰"),

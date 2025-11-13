@@ -1,43 +1,56 @@
-import os
-import asyncio
-import re
-# from sqlalchemy import text
 from dotenv import load_dotenv
-# from sqlalchemy.ext.asyncio import create_async_engine
-
+import os
+import pandas as pd
+from sqlalchemy import create_engine, text
+from datetime import datetime as dt
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 load_dotenv()
 
-DATABASE_URL='postgresql://neondb_owner:npg_RyXYMBvFN7f1@ep-lingering-shape-a8cqnx6v-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require'
 
-async def create_table_and_insert():
-    async_url = re.sub(r"^postgresql:", "postgresql+asyncpg:", DATABASE_URL)
-    engine = create_async_engine(async_url, echo=True)
 
-    async with engine.begin() as conn:
-        # Create table if not exists
-        await conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS vehicle_identification (
-                id SERIAL PRIMARY KEY,
-                registration_number VARCHAR(20),
-                chassis_number VARCHAR(30),
-                engine_number VARCHAR(30),
-                make VARCHAR(50),
-                model VARCHAR(50),
-                body_type VARCHAR(30),
-                color VARCHAR(30),
-                year_of_manufacture INT,
-                country_of_origin VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """))
+def get_footprint_data_from_db(reg_number):
+    try:
+        db_host = os.getenv("DB_HOST_UAT")
+        db_port = os.getenv("DB_PORT")
+        db_name = os.getenv("FP_DB_NAME")
+        driver = os.getenv("DRIVER")
+        trusted_conn = os.getenv("TRUSTED_CONN")
+        server = os.getenv("SERVER")
 
-        # Insert sample record
-        await conn.execute(text("""
-            INSERT INTO vehicle_identification
-            (registration_number, chassis_number, engine_number, make, model, body_type, color, year_of_manufacture, country_of_origin)
-            VALUES ('KDA 123A', 'JHMCM56557C404453', 'ENG123456789', 'Toyota', 'Corolla', 'Saloon', 'White', 2018, 'Japan');
-        """))
+        connection_string = (
+            f"mssql+pyodbc://{db_host},{db_port}/{db_name}?driver={driver}&trusted_connection={trusted_conn}"
+        )
+        #SQLAlchemy engine
+        engine = create_engine(connection_string)
+        logger.info(f"Successfully connected to the footprint DB::")
+    except Exception as e:
+        logger.error(f'error getting DB credentials:: {e}')
 
-    await engine.dispose()
+    try:
+        reg_str_string = reg_number.replace(' ', '')
+        first_ = reg_str_string[:3]
+        second_ = reg_str_string[3:]
 
-asyncio.run(create_table_and_insert())
+        query = text('''
+            SELECT TOP 1 * 
+            FROM ICEALIONVehiclesnew
+            WHERE RegistrationNo LIKE :reg_pattern
+            order by PeriodFrom DESC;
+        ''')
+        params = {'reg_pattern': f'%{first_}%{second_}%'}
+
+        with engine.connect() as connection:
+            df = pd.read_sql_query(
+                query,
+                connection,
+                params=params
+            )
+        return df
+    except Exception as e:
+        logger.error(f'error fetching FP_data{e}')
+
+
+# print(get_footprint_data_from_db('KDA070'))
+
