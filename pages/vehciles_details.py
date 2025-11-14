@@ -2,6 +2,22 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime as dt
 from db.models import get_footprint_data_from_db
+from google.oauth2 import service_account
+from google.cloud import bigquery
+import json
+
+# Create credentials
+credentials = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"]
+)
+
+# Initialize client
+client = bigquery.Client(credentials=credentials, project=st.secrets["gcp_service_account"]["project_id"])
+
+#target table:
+dataset_id = "SEMA_DB"
+table_id = "table_name"
+table_ref = f"{client.project}.{dataset_id}.{table_id}"
 
 
 field_keys = {
@@ -149,6 +165,38 @@ with st.form("ownership_form"):
 
     submitted_ownership = st.form_submit_button("✅ Submit Ownership Details")
 
+
+
+   
+if submitted:
+    input_dict = {
+        "reg_number" : reg_number,
+        "make":make,
+        "color":color,
+        "number_of_axles":number_of_axles
+
+        
+    }
+
+    st.write("You have entered the following product details:")
+    st.json(input_dict)
+
+    # 🪣 Step 3: Load only new product rows
+    new_df = pd.DataFrame([input_dict])
+    new_df['updated_at'] = dt.now()
+
+    if not new_df.empty:
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+        load_job = client.load_table_from_dataframe(new_df, table_ref, job_config=job_config)
+        load_job.result()
+        st.success("✅ New rows successfully updated")
+    else:
+        st.warning("⚠️ No new rows found — nothing to upload.")
+
+
+
+
+    
 
 
 
